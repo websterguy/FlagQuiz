@@ -45,8 +45,8 @@ public class MainActivity extends AppCompatActivity {
     private int mCorrectGuesses; // number of correct guesses
     private SecureRandom rng; // used to randomize the quiz
     private Handler handler; // used to delay loading next country
-    private int mChoices = 4;
-    private String mRegion = "All";
+    private int mChoices;
+    private String mRegion;
 
     private TextView mQuestionNumberTextView; // shows current question #
     private ImageView mFlagImageView; // displays a flag
@@ -87,8 +87,36 @@ public class MainActivity extends AppCompatActivity {
             Log.e(TAG, "Error loading from JSON", e);
         }
 
-        PreferenceManager.getDefaultSharedPreferences(this)
-                .registerOnSharedPreferenceChangeListener(mSharedPreferenceChangeListener);
+        // Access shared preferences
+        SharedPreferences preferences = PreferenceManager.getDefaultSharedPreferences(this);
+
+        // Load current preferences or set them on first install
+        boolean firstRun = preferences.getBoolean("pref_firstRun", true);
+
+        if (firstRun) {
+            SharedPreferences.Editor preferenceEditor = preferences.edit();
+            preferenceEditor.putString(CHOICES, getString(R.string.default_choices));
+            preferenceEditor.putString(REGIONS, getString(R.string.default_region));
+            preferenceEditor.putBoolean("pref_firstRun", false);
+            preferenceEditor.apply();
+            mChoices = Integer.parseInt(getString(R.string.default_choices));
+            mRegion = getString(R.string.default_region);
+            Log.i(TAG, "Saved default preferences on first run");
+        }
+        else {
+            mChoices = Integer.parseInt(preferences.getString(CHOICES,
+                    getString(R.string.default_choices)));
+            mRegion = preferences.getString(REGIONS, getString(R.string.default_region));
+            Log.i(TAG, "Preferences loaded");
+        }
+
+        // Set preference change listener
+        preferences.registerOnSharedPreferenceChangeListener(mSharedPreferenceChangeListener);
+
+        updateRegion(mRegion);
+        updateChoices();
+
+        Log.i(TAG, "Choices: " + mChoices + " Region: " + mRegion);
 
         // DONE: Call the method resetQuiz() to start the quiz.
         resetQuiz();
@@ -161,15 +189,27 @@ public class MainActivity extends AppCompatActivity {
 
         // DONE: Loop through all buttons, enable them all and set them to the first 4 countries
         // in the all countries list
-        for (int i = 0; i < mButtons.length; i++) {
+
+        // Modified to make sure correct country isn't duplicated if it is within the n values
+        // where n is the number of choices mChoices
+        // TODO: Only add countries to buttons if they match the region to prevent player from
+        //  ignoring buttons they know aren't in the region. Either build a new list only
+        //  containing countries that match the region and then pull from that list; or create an
+        //  int offset that gets incremented when a country doesn't match the selected region
+        //  and set a while loop where get(i + offset) each loop (keep offset value each for loop).
+        boolean answerAdded = false;
+        String countryToAdd = null;
+        for (int i = 0; i < mChoices; i++) {
             mButtons[i].setEnabled(true);
-            mButtons[i].setText(mAllCountriesList.get(i).getName());
+            countryToAdd = mAllCountriesList.get(i).getName();
+            mButtons[i].setText(countryToAdd);
+            if (mCorrectCountry.getName().equals(countryToAdd))
+                answerAdded = true;
         }
 
         // DONE: After the loop, randomly replace one of the 4 buttons with the name of the correct country
-        mButtons[rng.nextInt(mButtons.length)].setText(mCorrectCountry.getName());
-
-
+        if (!answerAdded)
+            mButtons[rng.nextInt(mChoices)].setText(mCorrectCountry.getName());
     }
 
     /**
@@ -276,11 +316,14 @@ public class MainActivity extends AppCompatActivity {
 
     public void updateRegion(String region) {
         mRegion = region.replaceAll("_", " ");
-        resetQuiz();
     }
 
     public void updateChoices() {
-
-        resetQuiz();
+        for (int i = 0; i < mButtons.length; i++) {
+            if (i < mChoices)
+                mButtons[i].setVisibility(View.VISIBLE);
+            else
+                mButtons[i].setVisibility(View.GONE);
+        }
     }
 }
